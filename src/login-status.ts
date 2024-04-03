@@ -1,6 +1,6 @@
 export enum LOGIN_STATUS {
   /** 未登录 */
-  PADDING = 0,
+  PENDING = 0,
   /** 登陆中 */
   LOGGING = 1,
   /** 登录成功 */
@@ -10,11 +10,11 @@ export enum LOGIN_STATUS {
 type Callback = (res?: unknown) => void
 
 export class LoginStatus {
-  protected static status = LOGIN_STATUS.PADDING
+  protected static status = LOGIN_STATUS.PENDING
   protected static failCallbacks = [] as Callback[]
   protected static successCallbacks = [] as Callback[]
   protected static loggingCallbacks = [] as Callback[]
-  protected static results = [] as unknown[]
+  protected static results = [] as Array<{type: 'success'|'error', result: unknown}>
 
   static getStatus() {
     return LoginStatus.status
@@ -38,7 +38,8 @@ export class LoginStatus {
 
   static onSuccess(cb: Callback) {
     if (LoginStatus.status === LOGIN_STATUS.SUCCESS) {
-      const res = LoginStatus.results[LoginStatus.results.length - 1]
+      const last = LoginStatus.results[LoginStatus.results.length - 1]
+      const res = last && last.type === 'success' ? last.result : undefined
       cb(res)
     } else {
       LoginStatus.successCallbacks.push(cb)
@@ -66,7 +67,7 @@ export class LoginStatus {
 
   static success(res: unknown) {
     LoginStatus.status = LOGIN_STATUS.SUCCESS
-    LoginStatus.results.push(res)
+    LoginStatus.results.push({type: 'success', result: res})
     if (LoginStatus.successCallbacks.length) {
       const cbs = LoginStatus.successCallbacks.slice()
       LoginStatus.successCallbacks = []
@@ -81,8 +82,8 @@ export class LoginStatus {
   }
 
   static fail(err: unknown) {
-    LoginStatus.status = LOGIN_STATUS.PADDING
-    LoginStatus.results.push(err)
+    LoginStatus.status = LOGIN_STATUS.PENDING
+    LoginStatus.results.push({type: 'error', result: err})
     if (LoginStatus.failCallbacks.length) {
       const cbs = LoginStatus.failCallbacks.slice()
       LoginStatus.failCallbacks = []
