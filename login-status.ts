@@ -9,22 +9,31 @@ export enum LOGIN_STATUS {
 
 export type EventName = 'logging'|'success'|'fail'|'status-change'
 
-// type StatusCallback = (res?: unknown) => void
-// type StatusChangeCallback = (status: LOGIN_STATUS) => void
-
-// type Callback<T extends Function> = {scope: string, callback: T}
 type GroupName = string
-// type EventName = string
 type Handler = {group: GroupName, callback: Function, once: boolean}
 type Events = Record<EventName, Array<Handler>>
 
 class LoginStatus {
   protected static status = LOGIN_STATUS.UNLOGGED
-  protected static eventsMap = new WeakMap<LoginStatus, Events>()
-  protected static last = {
-    type: null,
-    result: undefined
-  } as {type: null|'success'|'fail', result: unknown}
+  protected static eventsMap = new Map<LoginStatus, Events>()
+
+  constructor() {
+    LoginStatus.eventsMap.set(this, {} as Events)
+  }
+
+  /**
+   * 销毁事件存储对象
+   */
+  public destroy() {
+    LoginStatus.eventsMap.delete(this)
+  }
+
+  /**
+   * 获取当前登录状态
+   */
+  public getStatus() {
+    return LoginStatus.status
+  }
 
   /**
    * 添加事件监听
@@ -39,15 +48,10 @@ class LoginStatus {
       return
     }
     if (eventName === 'success' && LoginStatus.status === LOGIN_STATUS.LOGGED) {
-      const res = LoginStatus.last.type === 'success' ? LoginStatus.last.result : null
-      callback(res)
+      callback()
       return
     }
-    let events = LoginStatus.eventsMap.get(this)
-    if (!events) {
-      events = {} as Events
-      LoginStatus.eventsMap.set(this, events)
-    }
+    const events = LoginStatus.eventsMap.get(this) as Events
     if (!events[eventName]) {
       events[eventName] = []
     }
@@ -67,15 +71,10 @@ class LoginStatus {
       return
     }
     if (eventName === 'success' && LoginStatus.status === LOGIN_STATUS.LOGGED) {
-      const res = LoginStatus.last.type === 'success' ? LoginStatus.last.result : null
-      callback(res)
+      callback()
       return
     }
-    let events = LoginStatus.eventsMap.get(this)
-    if (!events) {
-      events = {} as Events
-      LoginStatus.eventsMap.set(this, events)
-    }
+    const events = LoginStatus.eventsMap.get(this) as Events
     if (!events[eventName]) {
       events[eventName] = []
     }
@@ -89,8 +88,8 @@ class LoginStatus {
    * @param target - 解除目标，可以是分组名或事件回调
    */
   public off(eventName: EventName, target?: string|Function): void {
-    const events = LoginStatus.eventsMap.get(this)
-    if (!events || !events[eventName]) {
+    const events = LoginStatus.eventsMap.get(this) as Events
+    if (!events[eventName]) {
       return
     }
     const listeners = events[eventName]
@@ -110,46 +109,38 @@ class LoginStatus {
    * @param args - 参数
    */
   protected emit(eventName: EventName, ...args: unknown[]): void {
-    const events = LoginStatus.eventsMap.get(this)
-    if (!events || !events[eventName]) {
-      return
-    }
-    const listeners = events[eventName]
-    events[eventName] = []
-    for (let i = 0; i < listeners.length; i++) {
-      try {
-        listeners[i].callback(...args)
-      } catch (error) {
-        console.error(error)
+    LoginStatus.eventsMap.forEach(events => {
+      const listeners = events[eventName]
+      events[eventName] = []
+      for (let i = 0; i < listeners.length; i++) {
+        try {
+          listeners[i].callback(...args)
+        } catch (error) {
+          console.error(error)
+        }
       }
-    }
+    })
   }
 
   public logging() {
     LoginStatus.status = LOGIN_STATUS.LOGGING
-    this.emit('status-change')
-
-    LoginStatus.last = {type: null, result: undefined}
+    this.emit('status-change', LoginStatus.status)
     this.emit('logging')
   }
 
-  public success(res: unknown) {
+  public success() {
     LoginStatus.status = LOGIN_STATUS.LOGGED
-    this.emit('status-change')
-
-    LoginStatus.last = {type: 'success', result: res}
-    this.emit('success', res)
+    this.emit('status-change', LoginStatus.status)
+    this.emit('success')
   }
 
-  public fail(err: unknown) {
+  public fail() {
     LoginStatus.status = LOGIN_STATUS.UNLOGGED
-    this.emit('status-change')
-    
-    LoginStatus.last = {type: 'fail', result: err}
-    this.emit('fail', err)
+    this.emit('status-change', LoginStatus.status)
+    this.emit('fail')
   }
 }
 
-export function useLoginStatus() {
+export default function useLoginStatus() {
   return new LoginStatus()
 }
